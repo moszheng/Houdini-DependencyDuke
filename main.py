@@ -41,6 +41,11 @@ def collect_material_files():
             print(f"Created output folder: {output_folder}")
             print("/--------------------------------------------------/")
 
+        # Duplicate HIP
+        hip_file_name = os.path.basename(hip_file_path)
+        destination_hip_path = os.path.join(output_folder, hip_file_name)
+        shutil.copy2(hip_file_path, destination_hip_path)
+
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
         
         for current_node in hou.node('/').allNodes(): # 遍歷場景中所有現有的節點實例
@@ -81,9 +86,12 @@ def collect_material_files():
                             # Copy2
                             shutil.copy2(absolute_path, destination_path)
                             collected_files.add(absolute_path)
-                            print(f"Copied: {absolute_path} \n to {destination_path}")
-
+                            print(f"Copied:\n {absolute_path} \n to {destination_path}")
+        hou.ui.displayMessage(f"Material file collection complete! Copied {len(collected_files)} files to: {output_folder}",
+                              title="Houdini Material Collector")
         print("Material file collection complete.")
+
+        
 
     except Exception as e:
         print(f"An error occurred: {e}")
