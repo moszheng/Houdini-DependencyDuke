@@ -109,92 +109,106 @@ def collect_material_files():
         external_collected_files = set() # 追蹤移動到 external 的檔案
         parameters_updated = [] # 追蹤更新的參數
         
-        for current_node in hou.node('/').allNodes():
+        # Get all file reference parameters in one pass
+        file_parms = []
+        for node in hou.node('/').allNodes():
             try:
-                for parm in current_node.parms():
+                for parm in node.parms():
                     parm_template = parm.parmTemplate()
-
                     # 確保 parm_template 存在，且它是 String 類型的參數模板
                     # 使用 hou.parmTemplateType.String 來判斷參數基本類型
-                    if parm_template is not None and \
-                    parm_template.type() == hou.parmTemplateType.String and \
-                    parm_template.stringType() == hou.stringParmType.FileReference:
+                    if (parm_template is not None and 
+                        parm_template.type() == hou.parmTemplateType.String and 
+                        parm_template.stringType() == hou.stringParmType.FileReference):
+                        file_parms.append((node, parm))
+            except Exception as e:
+                print(f"/----------Error scanning node {node.path()}------------/")
+                print(f"Error: {e}")
+                continue
+        print(f"Found {len(file_parms)} file reference parameters to process...")
+        
+        # Process all file parameters
+        for current_node, parm in file_parms:
+            try:
+                # 檔案路徑
+                file_path = parm.eval()
+                expanded_file_path = hou.expandString(file_path) # 考慮到可能會有表達式，需要 expandString
+
+                if not expanded_file_path or not os.path.exists(expanded_file_path): # 檢查路徑是否有效且存在
+                    continue
+                    
+                absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
+                
+                if absolute_path in collected_files or absolute_path in external_collected_files:
+                    continue
+                
+                original_filename = os.path.basename(absolute_path)
+
+                if is_target_file(expanded_file_path):
+                    
+                    if not is_file_inside_hip(absolute_path, hip_dir): # 判斷外部連結
                         
-                        # 檔案路徑
-                        file_path = parm.eval()
-                        expanded_file_path = hou.expandString(file_path) # 考慮到可能會有表達式，需要 expandString
+                        external_folder_output = os.path.join(output_folder, "external")
+                        
+                        if not os.path.exists(external_folder_output):
+                            os.makedirs(external_folder_output)
+                        
+                        external_output_path = os.path.join(external_folder_output, original_filename) # Paths for external file
+                        
+                        # Copy to both HIP/external and output/external
+                        shutil.copy2(absolute_path, external_output_path)
+                        
+                        # Update parameter: $HIP/external/filename
+                        new_path = f"$HIP/external/{os.path.basename(absolute_path)}"
+                        parm.set(new_path)
+                        
+                        external_collected_files.add(absolute_path)
+                        parameters_updated.append({
+                            'node': current_node.path(),
+                            'parameter': parm.name(),
+                            'old_path': file_path,
+                            'new_path': new_path,
+                            'original_file': absolute_path
+                        })
 
-                        if expanded_file_path and os.path.exists(expanded_file_path): # 檢查路徑是否有效且存在
-                            
-                            absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
-                            original_filename = os.path.basename(absolute_path)
+                        print(f"✓ Moved external file: {original_filename}")
+                        print(f"  From: {absolute_path}")
+                        print(f"  To: {new_path}")
+                        print(f"  Node: {current_node.path()}")
+                        collected_files.add(absolute_path)
 
-                            if is_target_file(expanded_file_path):
-                                if absolute_path not in collected_files:
-                                    if not is_file_inside_hip(absolute_path, hip_dir): # 判斷外部連結
-                                        
-                                        external_folder_output = os.path.join(output_folder, "external")
-                                        
-                                        if not os.path.exists(external_folder_output):
-                                            os.makedirs(external_folder_output)
-                                        
-                                        external_output_path = os.path.join(external_folder_output, original_filename) # Paths for external file
-                                        
-                                        # Copy to both HIP/external and output/external
-                                        shutil.copy2(absolute_path, external_output_path)
-                                        
-                                        # Update parameter: $HIP/external/filename
-                                        new_path = f"$HIP/external/{os.path.basename(absolute_path)}"
-                                        parm.set(new_path)
-                                        
-                                        external_collected_files.add(absolute_path)
-                                        parameters_updated.append({
-                                            'node': current_node.path(),
-                                            'parameter': parm.name(),
-                                            'old_path': file_path,
-                                            'new_path': new_path,
-                                            'original_file': absolute_path
-                                        })
+                    else:
+                        relative_path = os.path.relpath(absolute_path, hip_dir)
+                        destination_path = os.path.join(output_folder, relative_path)
+                        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
-                                        print(f"✓ Moved external file: {original_filename}")
-                                        print(f"  From: {absolute_path}")
-                                        print(f"  To: {new_path}")
-                                        print(f"  Node: {current_node.path()}")
+                        # 處理同名檔案衝突
+                        if os.path.exists(destination_path):
+                            base, ext = os.path.splitext(os.path.basename(absolute_path))
+                            i = 1
+                            while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
+                                i += 1
+                            destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
 
-                                    else:
-                                        relative_path = os.path.relpath(absolute_path, hip_dir)
-                                        destination_path = os.path.join(output_folder, relative_path)
-                                        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-
-                                        # 處理同名檔案衝突
-                                        if os.path.exists(destination_path):
-                                            base, ext = os.path.splitext(os.path.basename(absolute_path))
-                                            i = 1
-                                            while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
-                                                i += 1
-                                            destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
-
-                                        # Copy2
-                                        shutil.copy2(absolute_path, destination_path)
-                                        collected_files.add(absolute_path)
-                                        # print(f"Copied:\n {absolute_path} \n to {destination_path}")
-                            else:
-                                # Track skipped files
-                                if absolute_path not in skipped_files:
-                                    skipped_files.add(absolute_path)
-                                    _, ext = os.path.splitext(expanded_file_path.lower())
-                                    print(f"✗ Skipped: {current_node.path()}")
+                        # Copy2
+                        shutil.copy2(absolute_path, destination_path)
+                        collected_files.add(absolute_path)
+                        # print(f"Copied:\n {absolute_path} \n to {destination_path}")
+                else:
+                    # Track skipped files
+                    if absolute_path not in skipped_files:
+                        skipped_files.add(absolute_path)
+                        print(f"✗ Skipped: {current_node.path()}")
             except Exception as e:
                 print("/----------Error------------/")
                 print(f"Error processing node {current_node.path()}:\n{e}")
                 continue
         
         copy_hip_file(hip_file_path, output_folder)
+        print(f"Total files collected: {len(collected_files)}")
+        print(f"Total external files collected: {len(external_collected_files)}")
+        print(f"Total files skipped: {len(skipped_files)}")
     except Exception as e:
         print(f"An error occurred: {e}")
         
-    print(f"Total files collected: {len(collected_files)}")
-    print(f"Total external files collected: {len(external_collected_files)}")
-    print(f"Total files skipped: {len(skipped_files)}")
-
 collect_material_files()
