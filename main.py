@@ -81,8 +81,13 @@ def is_file_inside_hip(file_path, hip_dir):
 def collect_file_parameters():
     """Collect all file reference parameters from all nodes."""
     file_parms = []
+    skipped_rop_count = 0
     for node in hou.node('/').allNodes():
         try:
+            if node.type().category().name() == "Driver":
+                skipped_rop_count += 1
+                continue
+            
             for parm in node.parms():
                 parm_template = parm.parmTemplate()
                 # 確保 parm_template 存在，且它是 String 類型的參數模板
@@ -97,6 +102,8 @@ def collect_file_parameters():
             continue
 
     print(f"Found {len(file_parms)} file reference parameters to process...")
+    if skipped_rop_count > 0:
+        print(f"Skipped {skipped_rop_count} ROP nodes")
     return file_parms
 
 def copy_hip_file(hip_file_path, output_folder):

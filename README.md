@@ -142,7 +142,6 @@ The script includes comprehensive error handling:
 ⚠️ **Path Format**: External files are referenced using Houdini's `$HIP` variable format (`$HIP/external/filename`).
 
 1. External Link: but not overwrite origin file?
-1. Do not pack Render seq
 
 ## Troubleshooting
 
