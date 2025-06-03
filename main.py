@@ -160,7 +160,6 @@ def collect_material_files():
                                         print(f"  From: {absolute_path}")
                                         print(f"  To: {new_path}")
                                         print(f"  Node: {current_node.path()}")
-                                        collected_files.add(absolute_path)
 
                                     else:
                                         relative_path = os.path.relpath(absolute_path, hip_dir)
