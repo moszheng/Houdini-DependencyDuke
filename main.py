@@ -2,13 +2,12 @@ import hou
 import os
 import shutil
 
+"""
+遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
+並將它們複製到使用者指定的目標資料夾，同時保留相對於 Houdini 檔案根目錄的結構。
+"""
 def collect_material_files():
-    """
-    遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
-    並將它們複製到使用者指定的目標資料夾，同時保留相對於 Houdini 檔案根目錄的結構。
-    """
     try:
-        
         hip_file_path = hou.hipFile.path() # 獲取當前 Houdini 檔案的路徑
 
         if not hip_file_path:
@@ -48,9 +47,8 @@ def collect_material_files():
 
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
         
-        for current_node in hou.node('/').allNodes(): # 遍歷場景中所有現有的節點實例
-            for parm in current_node.parms(): # 遍歷節點的所有參數
-                
+        for current_node in hou.node('/').allNodes():
+            for parm in current_node.parms():
                 parm_template = parm.parmTemplate()
 
                 # 確保 parm_template 存在，且它是 String 類型的參數模板
@@ -90,8 +88,6 @@ def collect_material_files():
         hou.ui.displayMessage(f"Material file collection complete! Copied {len(collected_files)} files to: {output_folder}",
                               title="Houdini Material Collector")
         print("Material file collection complete.")
-
-        
 
     except Exception as e:
         print(f"An error occurred: {e}")
