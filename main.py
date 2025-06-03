@@ -2,6 +2,33 @@ import hou
 import os
 import shutil
 
+def get_output_folder(hip_dir):
+    # Ask output direction
+    output_folder = hou.ui.selectFile(
+        start_directory=hip_dir, # 預設開啟在 Houdini 檔案所在目錄
+        title="Select Output Folder for Material Files",
+        pattern="*", # 允許選擇任何資料夾
+        collapse_sequences=False,
+        file_type=hou.fileType.Directory
+    )
+
+    if not output_folder:
+        print("Operation cancelled by user. No output folder selected.")
+        hou.ui.displayMessage("Material collection cancelled. No output folder selected.",
+                                title="Houdini Material Collector")
+        return
+
+    # 清理路徑，確保它是標準格式
+    output_folder = hou.expandString(output_folder) # 處理可能存在的 $HIP 等變數
+    output_folder = os.path.normpath(output_folder) # 正規化路徑，處理斜線方向等
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print(f"Created output folder: {output_folder}")
+        print("/--------------------------------------------------/")
+    
+    return output_folder
+
 """
 遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
 並將它們複製到使用者指定的目標資料夾，同時保留相對於 Houdini 檔案根目錄的結構。
@@ -15,36 +42,18 @@ def collect_material_files():
             return
 
         hip_dir = os.path.dirname(hip_file_path) # 獲取 Houdini 檔案所在的目錄作為根目錄
-        
-        # Ask output direction
-        output_folder = hou.ui.selectFile(
-            start_directory=hip_dir, # 預設開啟在 Houdini 檔案所在目錄
-            title="Select Output Folder for Material Files",
-            pattern="*", # 允許選擇任何資料夾
-            collapse_sequences=False,
-            file_type=hou.fileType.Directory
-        )
-
+    
+        # Get output folder
+        output_folder = get_output_folder(hip_dir)
         if not output_folder:
-            print("Operation cancelled by user. No output folder selected.")
-            hou.ui.displayMessage("Material collection cancelled. No output folder selected.",
-                                  title="Houdini Material Collector")
             return
-
-        # 清理路徑，確保它是標準格式
-        output_folder = hou.expandString(output_folder) # 處理可能存在的 $HIP 等變數
-        output_folder = os.path.normpath(output_folder) # 正規化路徑，處理斜線方向等
-
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
-            print(f"Created output folder: {output_folder}")
-            print("/--------------------------------------------------/")
 
         # Duplicate HIP
         hip_file_name = os.path.basename(hip_file_path)
         destination_hip_path = os.path.join(output_folder, hip_file_name)
         shutil.copy2(hip_file_path, destination_hip_path)
 
+        # Collect files
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
         
         for current_node in hou.node('/').allNodes():
