@@ -77,12 +77,37 @@ def is_file_inside_hip(file_path, hip_dir):
         return abs_file_path.startswith(abs_hip_dir)
     except:
         return False
+    
+def collect_file_parameters():
+    """Collect all file reference parameters from all nodes."""
+    file_parms = []
+    for node in hou.node('/').allNodes():
+        try:
+            for parm in node.parms():
+                parm_template = parm.parmTemplate()
+                # 確保 parm_template 存在，且它是 String 類型的參數模板
+                # 使用 hou.parmTemplateType.String 來判斷參數基本類型
+                if (parm_template is not None and 
+                    parm_template.type() == hou.parmTemplateType.String and 
+                    parm_template.stringType() == hou.stringParmType.FileReference):
+                    file_parms.append((node, parm))
+        except Exception as e:
+            print(f"/----------Error scanning node {node.path()}------------/")
+            print(f"Error: {e}")
+            continue
+
+    print(f"Found {len(file_parms)} file reference parameters to process...")
+    return file_parms
 
 def copy_hip_file(hip_file_path, output_folder):
     # Duplicate HIP
-    hip_file_name = os.path.basename(hip_file_path)
-    destination_hip_path = os.path.join(output_folder, hip_file_name)
-    shutil.copy2(hip_file_path, destination_hip_path)
+    try:
+        hip_file_name = os.path.basename(hip_file_path)
+        destination_hip_path = os.path.join(output_folder, hip_file_name)
+        shutil.copy2(hip_file_path, destination_hip_path)
+    except Exception as e:
+        print(f"Error copying HIP file: {e}")
+        return False
 
 """
 遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
@@ -108,27 +133,11 @@ def collect_material_files():
         skipped_files = set()
         external_collected_files = set() # 追蹤移動到 external 的檔案
         parameters_updated = [] # 追蹤更新的參數
-        
-        # Get all file reference parameters in one pass
-        file_parms = []
-        for node in hou.node('/').allNodes():
-            try:
-                for parm in node.parms():
-                    parm_template = parm.parmTemplate()
-                    # 確保 parm_template 存在，且它是 String 類型的參數模板
-                    # 使用 hou.parmTemplateType.String 來判斷參數基本類型
-                    if (parm_template is not None and 
-                        parm_template.type() == hou.parmTemplateType.String and 
-                        parm_template.stringType() == hou.stringParmType.FileReference):
-                        file_parms.append((node, parm))
-            except Exception as e:
-                print(f"/----------Error scanning node {node.path()}------------/")
-                print(f"Error: {e}")
-                continue
-        print(f"Found {len(file_parms)} file reference parameters to process...")
-        
-        # Process all file parameters
-        for current_node, parm in file_parms:
+        """
+        Get all file reference parameters in one pass
+        and Process all file parameters
+        """
+        for current_node, parm in collect_file_parameters():
             try:
                 # 檔案路徑
                 file_path = parm.eval()
