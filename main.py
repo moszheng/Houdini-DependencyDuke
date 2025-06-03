@@ -57,43 +57,48 @@ def collect_material_files():
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
         
         for current_node in hou.node('/').allNodes():
-            for parm in current_node.parms():
-                parm_template = parm.parmTemplate()
+            try:
+                for parm in current_node.parms():
+                    parm_template = parm.parmTemplate()
 
-                # 確保 parm_template 存在，且它是 String 類型的參數模板
-                # 使用 hou.parmTemplateType.String 來判斷參數基本類型
-                if parm_template is not None and \
-                   parm_template.type() == hou.parmTemplateType.String and \
-                   parm_template.stringType() == hou.stringParmType.FileReference:
-                    
-                    # 檔案路徑
-                    file_path = parm.eval()
-                    expanded_file_path = hou.expandString(file_path) # 考慮到可能會有表達式，需要 expandString
-
-                    if expanded_file_path and os.path.exists(expanded_file_path): # 檢查路徑是否有效且存在
+                    # 確保 parm_template 存在，且它是 String 類型的參數模板
+                    # 使用 hou.parmTemplateType.String 來判斷參數基本類型
+                    if parm_template is not None and \
+                    parm_template.type() == hou.parmTemplateType.String and \
+                    parm_template.stringType() == hou.stringParmType.FileReference:
                         
-                        absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
+                        # 檔案路徑
+                        file_path = parm.eval()
+                        expanded_file_path = hou.expandString(file_path) # 考慮到可能會有表達式，需要 expandString
 
-                        if absolute_path not in collected_files:
-                            # os.path.relpath 會計算 absolute_path 相對於 start (houdini_hip_dir) 的相對路徑
-                            relative_path = os.path.relpath(absolute_path, hip_dir)
-                            #目標路徑
-                            # destination_path = os.path.join(output_folder, os.path.basename(absolute_path))
-                            destination_path = os.path.join(output_folder, relative_path)
-                            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+                        if expanded_file_path and os.path.exists(expanded_file_path): # 檢查路徑是否有效且存在
+                            
+                            absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
 
-                            # 處理同名檔案衝突
-                            if os.path.exists(destination_path):
-                                base, ext = os.path.splitext(os.path.basename(absolute_path))
-                                i = 1
-                                while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
-                                    i += 1
-                                destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+                            if absolute_path not in collected_files:
+                                # os.path.relpath 會計算 absolute_path 相對於 start (houdini_hip_dir) 的相對路徑
+                                relative_path = os.path.relpath(absolute_path, hip_dir)
+                                #目標路徑
+                                # destination_path = os.path.join(output_folder, os.path.basename(absolute_path))
+                                destination_path = os.path.join(output_folder, relative_path)
+                                os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
-                            # Copy2
-                            shutil.copy2(absolute_path, destination_path)
-                            collected_files.add(absolute_path)
-                            print(f"Copied:\n {absolute_path} \n to {destination_path}")
+                                # 處理同名檔案衝突
+                                if os.path.exists(destination_path):
+                                    base, ext = os.path.splitext(os.path.basename(absolute_path))
+                                    i = 1
+                                    while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
+                                        i += 1
+                                    destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+
+                                # Copy2
+                                shutil.copy2(absolute_path, destination_path)
+                                collected_files.add(absolute_path)
+                                print(f"Copied:\n {absolute_path} \n to {destination_path}")
+            except Exception as e:
+                print("/----------Error------------/")
+                print(f"Error processing node {current_node.path()}:\n{e}")
+                continue
         hou.ui.displayMessage(f"Material file collection complete! Copied {len(collected_files)} files to: {output_folder}",
                               title="Houdini Material Collector")
         print("Material file collection complete.")
