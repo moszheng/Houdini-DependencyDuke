@@ -66,6 +66,24 @@ def get_output_folder(hip_dir):
     
     return output_folder
 
+def is_file_inside_hip(file_path, hip_dir):
+    """Check if file is inside HIP directory"""
+    try:
+        # Get absolute paths for comparison
+        abs_file_path = os.path.abspath(file_path)
+        abs_hip_dir = os.path.abspath(hip_dir)
+        
+        # Check if file path starts with hip directory path
+        return abs_file_path.startswith(abs_hip_dir)
+    except:
+        return False
+
+def copy_hip_file(hip_file_path, output_folder):
+    # Duplicate HIP
+    hip_file_name = os.path.basename(hip_file_path)
+    destination_hip_path = os.path.join(output_folder, hip_file_name)
+    shutil.copy2(hip_file_path, destination_hip_path)
+
 """
 遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
 並將它們複製到使用者指定的目標資料夾，同時保留相對於 Houdini 檔案根目錄的結構。
@@ -85,14 +103,11 @@ def collect_material_files():
         if not output_folder:
             return
 
-        # Duplicate HIP
-        hip_file_name = os.path.basename(hip_file_path)
-        destination_hip_path = os.path.join(output_folder, hip_file_name)
-        shutil.copy2(hip_file_path, destination_hip_path)
-
         # Collect files
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
         skipped_files = set()
+        external_collected_files = set() # 追蹤移動到 external 的檔案
+        parameters_updated = [] # 追蹤更新的參數
         
         for current_node in hou.node('/').allNodes():
             try:
@@ -112,26 +127,58 @@ def collect_material_files():
                         if expanded_file_path and os.path.exists(expanded_file_path): # 檢查路徑是否有效且存在
                             
                             absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
+                            original_filename = os.path.basename(absolute_path)
 
                             if is_target_file(expanded_file_path):
-
                                 if absolute_path not in collected_files:
-                                    relative_path = os.path.relpath(absolute_path, hip_dir)
-                                    destination_path = os.path.join(output_folder, relative_path)
-                                    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+                                    if not is_file_inside_hip(absolute_path, hip_dir): # 判斷外部連結
+                                        
+                                        external_folder_output = os.path.join(output_folder, "external")
+                                        
+                                        if not os.path.exists(external_folder_output):
+                                            os.makedirs(external_folder_output)
+                                        
+                                        external_output_path = os.path.join(external_folder_output, original_filename) # Paths for external file
+                                        
+                                        # Copy to both HIP/external and output/external
+                                        shutil.copy2(absolute_path, external_output_path)
+                                        
+                                        # Update parameter: $HIP/external/filename
+                                        new_path = f"$HIP/external/{os.path.basename(absolute_path)}"
+                                        parm.set(new_path)
+                                        
+                                        external_collected_files.add(absolute_path)
+                                        parameters_updated.append({
+                                            'node': current_node.path(),
+                                            'parameter': parm.name(),
+                                            'old_path': file_path,
+                                            'new_path': new_path,
+                                            'original_file': absolute_path
+                                        })
 
-                                    # 處理同名檔案衝突
-                                    if os.path.exists(destination_path):
-                                        base, ext = os.path.splitext(os.path.basename(absolute_path))
-                                        i = 1
-                                        while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
-                                            i += 1
-                                        destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+                                        print(f"✓ Moved external file: {original_filename}")
+                                        print(f"  From: {absolute_path}")
+                                        print(f"  To: {new_path}")
+                                        print(f"  Node: {current_node.path()}")
+                                        collected_files.add(absolute_path)
 
-                                    # Copy2
-                                    shutil.copy2(absolute_path, destination_path)
-                                    collected_files.add(absolute_path)
-                                    # print(f"Copied:\n {absolute_path} \n to {destination_path}")
+                                    else:
+                                        relative_path = os.path.relpath(absolute_path, hip_dir)
+                                        destination_path = os.path.join(output_folder, relative_path)
+                                        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+                                        # 處理同名檔案衝突
+                                        if os.path.exists(destination_path):
+                                            base, ext = os.path.splitext(os.path.basename(absolute_path))
+                                            i = 1
+                                            while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
+                                                i += 1
+                                            destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+
+                                        # Copy2
+                                        shutil.copy2(absolute_path, destination_path)
+                                        collected_files.add(absolute_path)
+                                        # print(f"Copied:\n {absolute_path} \n to {destination_path}")
                             else:
                                 # Track skipped files
                                 if absolute_path not in skipped_files:
@@ -142,11 +189,13 @@ def collect_material_files():
                 print("/----------Error------------/")
                 print(f"Error processing node {current_node.path()}:\n{e}")
                 continue
-
+        
+        copy_hip_file(hip_file_path, output_folder)
     except Exception as e:
         print(f"An error occurred: {e}")
         
     print(f"Total files collected: {len(collected_files)}")
+    print(f"Total external files collected: {len(external_collected_files)}")
     print(f"Total files skipped: {len(skipped_files)}")
 
 collect_material_files()
