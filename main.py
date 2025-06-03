@@ -2,6 +2,43 @@ import hou
 import os
 import shutil
 
+# Define file extensions to collect
+TARGET_EXTENSIONS = {
+    # Texture formats
+    '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.exr', '.hdr', '.pic', '.rat',
+    '.tga', '.bmp', '.gif', '.psd', '.iff', '.sgi', '.rgba', '.rgb',
+    
+    # Cache formats
+    '.bgeo', '.bgeo.sc', '.geo', '.abc', '.fbx', '.obj', '.ply',
+    '.vdb', '.sim', '.simdata', '.pc', '.pcd',
+    
+    # Alembic and USD
+    '.usd', '.usda', '.usdc', '.usdz',
+    
+    # Video formats
+    '.mov', '.mp4', '.avi', '.mkv', '.wmv', '.flv', '.webm',
+    
+    # Audio formats
+    '.wav', '.mp3', '.aac', '.ogg', '.flac',
+    
+    # Other common formats
+    '.lut', '.cube', '.3dl', '.csp', '.vf', '.m3u8'
+}
+
+def is_target_file(file_path):
+    """Check if file has a target extension"""
+    if not file_path:
+        return False
+    
+    # Get file extension (convert to lowercase for comparison)
+    _, ext = os.path.splitext(file_path.lower())
+    
+    # Handle special cases like .bgeo.sc
+    if file_path.lower().endswith('.bgeo.sc'):
+        return '.bgeo.sc' in TARGET_EXTENSIONS
+    
+    return ext in TARGET_EXTENSIONS
+
 def get_output_folder(hip_dir):
     # Ask output direction
     output_folder = hou.ui.selectFile(
@@ -55,6 +92,7 @@ def collect_material_files():
 
         # Collect files
         collected_files = set() # 用於追蹤已收集的檔案，避免重複複製
+        skipped_files = set()
         
         for current_node in hou.node('/').allNodes():
             try:
@@ -75,35 +113,40 @@ def collect_material_files():
                             
                             absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
 
-                            if absolute_path not in collected_files:
-                                # os.path.relpath 會計算 absolute_path 相對於 start (houdini_hip_dir) 的相對路徑
-                                relative_path = os.path.relpath(absolute_path, hip_dir)
-                                #目標路徑
-                                # destination_path = os.path.join(output_folder, os.path.basename(absolute_path))
-                                destination_path = os.path.join(output_folder, relative_path)
-                                os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+                            if is_target_file(expanded_file_path):
 
-                                # 處理同名檔案衝突
-                                if os.path.exists(destination_path):
-                                    base, ext = os.path.splitext(os.path.basename(absolute_path))
-                                    i = 1
-                                    while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
-                                        i += 1
-                                    destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+                                if absolute_path not in collected_files:
+                                    relative_path = os.path.relpath(absolute_path, hip_dir)
+                                    destination_path = os.path.join(output_folder, relative_path)
+                                    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
 
-                                # Copy2
-                                shutil.copy2(absolute_path, destination_path)
-                                collected_files.add(absolute_path)
-                                print(f"Copied:\n {absolute_path} \n to {destination_path}")
+                                    # 處理同名檔案衝突
+                                    if os.path.exists(destination_path):
+                                        base, ext = os.path.splitext(os.path.basename(absolute_path))
+                                        i = 1
+                                        while os.path.exists(os.path.join(output_folder, f"{base}_{i}{ext}")):
+                                            i += 1
+                                        destination_path = os.path.join(output_folder, f"{base}_{i}{ext}")
+
+                                    # Copy2
+                                    shutil.copy2(absolute_path, destination_path)
+                                    collected_files.add(absolute_path)
+                                    # print(f"Copied:\n {absolute_path} \n to {destination_path}")
+                            else:
+                                # Track skipped files
+                                if absolute_path not in skipped_files:
+                                    skipped_files.add(absolute_path)
+                                    _, ext = os.path.splitext(expanded_file_path.lower())
+                                    print(f"✗ Skipped: {current_node.path()}")
             except Exception as e:
                 print("/----------Error------------/")
                 print(f"Error processing node {current_node.path()}:\n{e}")
                 continue
-        hou.ui.displayMessage(f"Material file collection complete! Copied {len(collected_files)} files to: {output_folder}",
-                              title="Houdini Material Collector")
-        print("Material file collection complete.")
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        
+    print(f"Total files collected: {len(collected_files)}")
+    print(f"Total files skipped: {len(skipped_files)}")
 
 collect_material_files()
