@@ -127,11 +127,8 @@ Total files skipped: 2
 
 ## Error Handling
 
-The script includes comprehensive error handling:
-- Validates that the scene is saved before proceeding
 - Checks file existence before attempting operations
 - Continues processing even if individual nodes fail
-- Provides detailed error messages for troubleshooting
 
 ## Important Notes
 

@@ -135,11 +135,12 @@ def collect_file_parameters():
     return file_parms
 
 def copy_hip_file(hip_file_path, output_folder):
-    # Duplicate HIP
     try:
         hip_file_name = os.path.basename(hip_file_path)
-        destination_hip_path = os.path.join(output_folder, hip_file_name)
-        shutil.copy2(hip_file_path, destination_hip_path)
+        base_name, ext = os.path.splitext(hip_file_name)
+        destination_hip_path = os.path.join(output_folder, f"{base_name}_collected{ext}")
+        hou.hipFile.save(file_name = destination_hip_path) #Save as
+        
     except Exception as e:
         print(f"Error copying HIP file: {e}")
         return False
@@ -234,9 +235,9 @@ def collect_material_files():
                         })
 
                         print(f"✓ Moved external file: {original_filename}")
-                        print(f"  From: {absolute_path}")
-                        print(f"  To: {new_path}")
-                        print(f"  Node: {current_node.path()}")
+                        print(f"  - From: {absolute_path}")
+                        print(f"  - To: {new_path}")
+                        print(f"  - Node: {current_node.path()}")
                         collected_files.add(absolute_path)
 
                     else:
@@ -267,7 +268,7 @@ def collect_material_files():
                 continue
         
         copy_hip_file(hip_file_path, output_folder)
-        print("=" * 15)
+        print("=" * 30)
         print(f"Total files collected: {len(collected_files)}")
         print(f"Total external files collected: {len(external_collected_files)}")
         print(f"Total files skipped: {len(skipped_files)}")
