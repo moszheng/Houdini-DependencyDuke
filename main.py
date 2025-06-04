@@ -1,7 +1,6 @@
 import hou
 import os
 import shutil
-import glob
 import re
 
 # Define file extensions to collect
@@ -41,35 +40,32 @@ def is_target_file(file_path):
     
     return ext in TARGET_EXTENSIONS
 
+def is_frame_sequence(file_path):
+    return re.search(r'\.\d{4,5}(\.\w+)+$', os.path.basename(file_path)) is not None
+
 def get_sequence_files(path_pattern):
     path_pattern = hou.expandString(path_pattern)
-
     dir_path = os.path.dirname(path_pattern)
     base_name = os.path.basename(path_pattern)
 
-    # 建立 regex，將 frame number 部分變成可比對的 group
-    # .0001.bgeo.sc 的情況，找出如 v1.XXXX 的變化
-    frame_regex = re.sub(r'\$F\d*', r'\\d+', base_name)  # $F4 變成 \d+
-    frame_regex = frame_regex.replace('#', r'\d')  # #### 變成 \d\d\d\d
-
-    # 對於沒有顯式的 $F，但是 .0001.bgeo.sc 形式的情況
-    if '$F' not in base_name and '#' not in base_name:
-        # 嘗試匹配形如 .0001.bgeo.sc 的 frame number
-        match = re.search(r'(.*?)(\.\d{4})\.bgeo\.sc$', base_name)
-        if match:
-            prefix = match.group(1)
-            frame_regex = re.escape(prefix) + r'\.\d{4}\.bgeo\.sc'
-        else:
+    if '$F' in base_name or '#' in base_name:
+        # 表達式或井字號情況
+        frame_regex = re.sub(r'\$F\d*', r'\\d+', base_name)
+        frame_regex = frame_regex.replace('#', r'\\d')
+        regex = re.compile('^' + frame_regex + '$')
+    else:
+        # 雙重副檔名（ex. .0001.bgeo.sc）
+        match = re.match(r'^(.*?)(\.\d{4,5})((?:\.\w+)+)$', base_name)
+        if not match:
             return []
+        prefix, _, suffix = match.groups()
+        regex = re.compile('^' + re.escape(prefix) + r'\.\d{4,5}' + re.escape(suffix) + '$')
 
-    regex = re.compile('^' + frame_regex + '$')
-    sequence_files = []
-
-    for file in os.listdir(dir_path):
-        if regex.match(file):
-            sequence_files.append(os.path.join(dir_path, file))
-
-    return sorted(sequence_files)
+    return sorted([
+        os.path.join(dir_path, f)
+        for f in os.listdir(dir_path)
+        if regex.match(f)
+    ])
 
 def get_output_folder(hip_dir):
     # Ask output direction
@@ -129,7 +125,7 @@ def collect_file_parameters():
                     parm_template.stringType() == hou.stringParmType.FileReference):
                     file_parms.append((node, parm))
         except Exception as e:
-            print(f"/----------Error scanning node {node.path()}------------/")
+            print(f"/---Error scanning node {node.path()}---/")
             print(f"Error: {e}")
             continue
 
@@ -193,8 +189,9 @@ def collect_material_files():
                 original_filename = os.path.basename(absolute_path)
 
                 if is_target_file(expanded_file_path):
-                    # Handel cache seq
-                    if '.bgeo.sc' in file_path:
+
+                    if is_frame_sequence(file_path):
+
                         sequence_files = get_sequence_files(file_path)
                         for seq_file in sequence_files:
                             if not os.path.exists(seq_file):
@@ -211,16 +208,16 @@ def collect_material_files():
 
                         print(f"✓ Collected sequence: {len(sequence_files)} frames from {file_path}")
                         continue
+
                     if not is_file_inside_hip(absolute_path, hip_dir): # 判斷外部連結
                         
-                        external_folder_output = os.path.join(output_folder, "external")
+                        external_output_folder = os.path.join(output_folder, "external")
                         
-                        if not os.path.exists(external_folder_output):
-                            os.makedirs(external_folder_output)
+                        if not os.path.exists(external_output_folder):
+                            os.makedirs(external_output_folder)
                         
-                        external_output_path = os.path.join(external_folder_output, original_filename) # Paths for external file
+                        external_output_path = os.path.join(external_output_folder, original_filename) # Paths for external file
                         
-                        # Copy to both HIP/external and output/external
                         shutil.copy2(absolute_path, external_output_path)
                         
                         # Update parameter: $HIP/external/filename
@@ -270,6 +267,7 @@ def collect_material_files():
                 continue
         
         copy_hip_file(hip_file_path, output_folder)
+        print("=" * 15)
         print(f"Total files collected: {len(collected_files)}")
         print(f"Total external files collected: {len(external_collected_files)}")
         print(f"Total files skipped: {len(skipped_files)}")
