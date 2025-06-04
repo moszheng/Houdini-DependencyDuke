@@ -81,7 +81,7 @@ def get_output_folder(hip_dir):
         print("Operation cancelled by user. No output folder selected.")
         hou.ui.displayMessage(
             "Collection cancelled. No output folder selected.",
-            title="Houdini Material Collector"
+            title="Dependency Duke"
         )
         return
 
@@ -275,7 +275,7 @@ def collect_material_files():
         print(f"Total files skipped: {len(skipped_files)}")
         hou.ui.displayMessage(
             "Collection Complete!!",
-            title="Houdini Material Collector"
+            title="Dependency Duke"
         )
     except Exception as e:
         print(f"An error occurred: {e}")
