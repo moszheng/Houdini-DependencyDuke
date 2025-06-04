@@ -1,6 +1,8 @@
 import hou
 import os
 import shutil
+import glob
+import re
 
 # Define file extensions to collect
 TARGET_EXTENSIONS = {
@@ -38,6 +40,36 @@ def is_target_file(file_path):
         return '.bgeo.sc' in TARGET_EXTENSIONS
     
     return ext in TARGET_EXTENSIONS
+
+def get_sequence_files(path_pattern):
+    path_pattern = hou.expandString(path_pattern)
+
+    dir_path = os.path.dirname(path_pattern)
+    base_name = os.path.basename(path_pattern)
+
+    # 建立 regex，將 frame number 部分變成可比對的 group
+    # .0001.bgeo.sc 的情況，找出如 v1.XXXX 的變化
+    frame_regex = re.sub(r'\$F\d*', r'\\d+', base_name)  # $F4 變成 \d+
+    frame_regex = frame_regex.replace('#', r'\d')  # #### 變成 \d\d\d\d
+
+    # 對於沒有顯式的 $F，但是 .0001.bgeo.sc 形式的情況
+    if '$F' not in base_name and '#' not in base_name:
+        # 嘗試匹配形如 .0001.bgeo.sc 的 frame number
+        match = re.search(r'(.*?)(\.\d{4})\.bgeo\.sc$', base_name)
+        if match:
+            prefix = match.group(1)
+            frame_regex = re.escape(prefix) + r'\.\d{4}\.bgeo\.sc'
+        else:
+            return []
+
+    regex = re.compile('^' + frame_regex + '$')
+    sequence_files = []
+
+    for file in os.listdir(dir_path):
+        if regex.match(file):
+            sequence_files.append(os.path.join(dir_path, file))
+
+    return sorted(sequence_files)
 
 def get_output_folder(hip_dir):
     # Ask output direction
@@ -161,7 +193,24 @@ def collect_material_files():
                 original_filename = os.path.basename(absolute_path)
 
                 if is_target_file(expanded_file_path):
-                    
+                    # Handel cache seq
+                    if '.bgeo.sc' in file_path:
+                        sequence_files = get_sequence_files(file_path)
+                        for seq_file in sequence_files:
+                            if not os.path.exists(seq_file):
+                                continue
+                            if seq_file in collected_files:
+                                continue
+
+                            relative_path = os.path.relpath(seq_file, hip_dir)
+                            destination_path = os.path.join(output_folder, relative_path)
+                            os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+                            shutil.copy2(seq_file, destination_path)
+                            collected_files.add(seq_file)
+
+                        print(f"✓ Collected sequence: {len(sequence_files)} frames from {file_path}")
+                        continue
                     if not is_file_inside_hip(absolute_path, hip_dir): # 判斷外部連結
                         
                         external_folder_output = os.path.join(output_folder, "external")
