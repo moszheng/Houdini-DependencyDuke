@@ -1,4 +1,4 @@
-# Dependency Duke - Houdini Material Collector
+# Dependency Duke - Houdini Assets Collector
 
 A Python script for SideFX Houdini that automatically **collects, organizes, and relocates all external file dependencies** from your scene, making your projects portable and self-contained.
 
@@ -12,8 +12,8 @@ A Python script for SideFX Houdini that automatically **collects, organizes, and
 
 ## Installation
 
-1. `Shelf` -> `New Tool...`
-1. `Script` -> Paste the python code
+1. Make a shelf tool and paste the code.
+
 
 ## Output Structure
 
