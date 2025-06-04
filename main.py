@@ -79,18 +79,19 @@ def get_output_folder(hip_dir):
 
     if not output_folder:
         print("Operation cancelled by user. No output folder selected.")
-        hou.ui.displayMessage("Material collection cancelled. No output folder selected.",
-                                title="Houdini Material Collector")
+        hou.ui.displayMessage(
+            "Collection cancelled. No output folder selected.",
+            title="Houdini Material Collector"
+        )
         return
 
-    # 清理路徑，確保它是標準格式
-    output_folder = hou.expandString(output_folder) # 處理可能存在的 $HIP 等變數
-    output_folder = os.path.normpath(output_folder) # 正規化路徑，處理斜線方向等
+    # Expand Houdini variables and normalize the path
+    output_folder = hou.expandString(output_folder)
+    output_folder = os.path.normpath(output_folder)
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
         print(f"Created output folder: {output_folder}")
-        print("/--------------------------------------------------/")
     
     return output_folder
 
@@ -147,8 +148,9 @@ def copy_hip_file(hip_file_path, output_folder):
 
 def collect_material_files():
     """
-    遍歷 Houdini 場景中的所有節點，收集其引用的外部檔案。
-    並將它們複製到使用者指定的目標資料夾，同時保留相對於 Houdini 檔案根目錄的結構。
+    遍歷 HIP 中的所有節點，收集引用的檔案。
+    並將它們複製到使用者指定的資料夾，同時保留相對於 HIP 根目錄的結構。
+    外連檔案會整合到 $HIP/external
     """
     try:
         hip_file_path = hou.hipFile.path() # 獲取當前 Houdini 檔案的路徑
@@ -183,12 +185,13 @@ def collect_material_files():
                     
                 absolute_path = os.path.abspath(expanded_file_path) # 將路徑正規化，處理相對路徑等
                 
+                # Skip if already processed
                 if absolute_path in collected_files or absolute_path in external_collected_files:
                     continue
                 
                 original_filename = os.path.basename(absolute_path)
 
-                if not is_target_file(expanded_file_path):
+                if not is_target_file(expanded_file_path): #
                     skipped_files.add(expanded_file_path)
                     print(f"✗ Skipped: {current_node.path()}")
                     continue
