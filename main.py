@@ -150,7 +150,7 @@ def collect_material_files():
     """
     遍歷 HIP 中的所有節點，收集引用的檔案。
     並將它們複製到使用者指定的資料夾，同時保留相對於 HIP 根目錄的結構。
-    外連檔案會整合到 $HIP/external
+    外連檔案會整合進 $HIP/external，並更新原始引用處的連結
     """
     try:
         hip_file_path = hou.hipFile.path() # 獲取當前 Houdini 檔案的路徑
@@ -273,6 +273,10 @@ def collect_material_files():
         print(f"Total files collected: {len(collected_files)}")
         print(f"Total external files collected: {len(external_collected_files)}")
         print(f"Total files skipped: {len(skipped_files)}")
+        hou.ui.displayMessage(
+            "Collection Complete!!",
+            title="Houdini Material Collector"
+        )
     except Exception as e:
         print(f"An error occurred: {e}")
         
